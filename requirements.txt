@@ -1,0 +1,4 @@
+dask>=2024.3.0
+distributed
+trino>=0.332.0
+trino[sqlalchemy]

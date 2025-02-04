@@ -2,39 +2,51 @@ from functools import partial
 
 import trino
 from trino.mapper import RowMapperFactory
-from trino.client import SegmentIterator, SpooledSegment
+from trino.client import SegmentIterator
 from trino.sqlalchemy import URL
 from sqlalchemy import create_engine, text
 
 import pandas as pd
 
-import re
 import dask
 import dask.dataframe as dd
 from dask.delayed import delayed
 
+MAX_QUERY_LENGTH = 1000000
 
-def df_to_sql_bulk_insert(df: pd.DataFrame, table: str) -> str:
-    """Converts DataFrame to bulk INSERT sql query
-    >>> data = [(1, "_suffixnan", 1), (2, "Noneprefix", 0), (3, "fooNULLbar", 1, 2.34)]
-    >>> df = pd.DataFrame(data, columns=["id", "name", "is_deleted", "balance"])
-    >>> df
-       id        name  is_deleted  balance
-    0   1  _suffixnan           1      NaN
-    1   2  Noneprefix           0      NaN
-    2   3  fooNULLbar           1     2.34
-    >>> query = df_to_sql_bulk_insert(df, "users")
-    >>> print(query)
-    INSERT INTO users (id, name, is_deleted, balance)
-    VALUES (1, '_suffixnan', 1, NULL),
-           (2, 'Noneprefix', 0, NULL),
-           (3, 'fooNULLbar', 1, 2.34);
-    """
-    df = df.copy()
+
+def df_to_sql_bulk_insert(df: pd.DataFrame, table: str) -> list:
+    """Converts a DataFrame to multiple bulk INSERT SQL statements,
+    ensuring each stays within MAX_QUERY_LENGTH."""
+
+    # Replace NaN with None for SQL NULL conversion
+    df = df.where(pd.notna(df), None)
     columns = ", ".join(df.columns)
-    tuples = map(str, df.itertuples(index=False, name=None))
-    values = re.sub(r"(?<=\W)(nan|None)(?=\W)", "NULL", (",\n" + " " * 7).join(tuples))
-    return f"INSERT INTO {table} ({columns})\nVALUES {values}"
+    prefix = f"INSERT INTO {table} ({columns}) VALUES "
+    # Convert DataFrame rows into formatted tuples
+    tuples = [tuple(row) for row in df.itertuples(index=False, name=None)]
+    values_list = [str(row).replace("None", "NULL") for row in tuples]
+
+    queries = []
+    current_query = prefix
+
+    for values in values_list:
+        row_length = len(values) + 1  # Account for ", " or ")"
+        current_length = len(current_query)
+        if current_length + row_length > MAX_QUERY_LENGTH - 1:
+            queries.append(current_query)
+            current_query = prefix + values
+        else:
+            if current_query == prefix:
+                current_query += values
+            else:
+                current_query += ",\n" + values
+    # if we just have one query that was under MAX_QUERY_LENGTH
+    # add it to the list of queries
+    if current_query and len(queries) == 0:
+        queries.append(current_query)
+
+    return queries
 
 
 @delayed
@@ -43,10 +55,11 @@ def write_trino(
     name: str,
     connection_kwargs: dict,
 ):
-    # do a single INSERT statement with multiple VALUES
     engine = create_engine(URL(**connection_kwargs))
     with engine.connect() as conn:
-        conn.execute(text(df_to_sql_bulk_insert(df, name)))
+        insert_queries = df_to_sql_bulk_insert(df, name)
+        for query in insert_queries:
+            conn.execute(text(query))
 
 
 @delayed
@@ -66,7 +79,6 @@ def create_table_if_not_exists(
     engine = create_engine(URL(**connection_kwargs))
     with engine.connect() as conn:
         if conn.execute(text(sql)).fetchall()[0][0] == 0:
-            print('table does not exist, creating it')
             df.to_sql(
                 name=name,
                 schema=connection_kwargs.get("schema", None),

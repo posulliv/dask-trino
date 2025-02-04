@@ -27,7 +27,12 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     python_requires=">=3.9",
-    install_requires=open("requirements.txt").read().strip().split("\n"),
+    install_requires=[
+        "dask>=2024.3.0",
+        "distributed",
+        "trino>=0.333.0",
+        "trino[sqlalchemy]",
+    ],
     include_package_data=True,
     zip_safe=False,
     extras_require={

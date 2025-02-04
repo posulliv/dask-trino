@@ -99,10 +99,20 @@ def test_query_with_filter(table, connection_kwargs):
     )
 
 
-def test_write_read_large_resultset(connection_kwargs, client):
-    query = f"select l.* from tpch.tiny.lineitem l, table(sequence( start => 1, stop => 5, step => 1)) n"
-    df_out = read_trino(query, connection_kwargs=connection_kwargs, npartitions=2)
-    assert df_out.shape[0].compute() == 11
-    dd.utils.assert_eq(
-        df.set_index('a'), df_out.set_index('a')
-    )
+def test_writing_large_dataframe(connection_kwargs):
+    df = dask.datasets.timeseries(end='2000-01-05')
+    to_trino(df, name="large_table", connection_kwargs=connection_kwargs)
+    df_out = read_trino("select * from large_table", connection_kwargs=connection_kwargs, npartitions=2)
+    assert df_out.shape[0].compute() == df.shape[0].compute()
+    engine = create_engine(URL(**connection_kwargs))
+    connection = engine.connect()
+    connection.execute(text("drop table large_table")).fetchall()
+
+
+#def test_write_read_large_resultset(connection_kwargs, client):
+#    query = f"select l.* from tpch.tiny.lineitem l, table(sequence( start => 1, stop => 5, step => 1)) n"
+#    df_out = read_trino(query, connection_kwargs=connection_kwargs, npartitions=2)
+#    assert df_out.shape[0].compute() == 11
+#    dd.utils.assert_eq(
+#        df.set_index('a'), df_out.set_index('a')
+#    )

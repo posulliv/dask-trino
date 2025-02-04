@@ -1,8 +1,14 @@
 from functools import partial
+from typing import Any
+from typing import List
+from typing import Optional
+from typing import Union
+from collections.abc import Iterator
 
 import trino
 from trino.mapper import RowMapperFactory
-from trino.client import SegmentIterator
+from trino.client import DecodableSegment, SpooledSegment, SegmentDecoder, CompressedQueryDataDecoderFactory
+from trino.mapper import RowMapper
 from trino.sqlalchemy import URL
 from sqlalchemy import create_engine, text
 
@@ -127,6 +133,47 @@ def to_trino(
     dask.compute(parts)
 
 
+class CustomSegmentIterator:
+    def __init__(self, segments: Union[DecodableSegment, List[DecodableSegment]], mapper: RowMapper) -> None:
+        self._segments = iter(segments if isinstance(segments, List) else [segments])
+        self._mapper = mapper
+        self._decoder = None
+        self._rows: Iterator[List[List[Any]]] = iter([])
+        self._finished = False
+        self._current_segment: Optional[DecodableSegment] = None
+
+    def __iter__(self) -> Iterator[List[Any]]:
+        return self
+
+    def __next__(self) -> List[Any]:
+        # If rows are exhausted, fetch the next segment
+        while True:
+            try:
+                return next(self._rows)
+            except StopIteration:
+                if self._finished:
+                    raise StopIteration
+                self._load_next_segment()
+
+    def _load_next_segment(self):
+        try:
+            # TODO - client needs to delete segments from storage
+            # causes issues with _fetch_segments method if 
+            # segments are deleted.
+            #if self._current_segment:
+             #   segment = self._current_segment.segment
+                #if isinstance(segment, SpooledSegment):
+                #    segment.acknowledge()
+
+            self._current_segment = next(self._segments)
+            if self._decoder is None:
+                self._decoder = SegmentDecoder(CompressedQueryDataDecoderFactory(self._mapper)
+                                               .create(self._current_segment.encoding))
+            self._rows = iter(self._decoder.decode(self._current_segment.segment))
+        except StopIteration:
+            self._finished = True
+
+
 def _fetch_segments(segments, row_mapper, columns):
     # TODO: why is this being called after the dask
     # dataframe has been created again?
@@ -136,7 +183,7 @@ def _fetch_segments(segments, row_mapper, columns):
     df_columns = [column['name'] if isinstance(column, dict) else column for column in columns]
     dataframes = []    
     for segment in segments:
-        rows = list(SegmentIterator(segment, row_mapper))
+        rows = list(CustomSegmentIterator(segment, row_mapper))
         dataframes.append(pd.DataFrame(rows, columns=df_columns))
     
     return pd.concat(dataframes, ignore_index=True) if dataframes else pd.DataFrame(columns=df_columns)

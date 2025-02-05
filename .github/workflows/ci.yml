@@ -41,7 +41,6 @@ jobs:
       fail-fast: false
       matrix:
         python: [
-          "3.9",
           "3.10",
           "3.11",
           "3.12",
@@ -51,9 +50,6 @@ jobs:
         ]
         trino: [
           "latest",
-        ]
-        sqlalchemy: [
-          "~=1.4.0"
         ]
     env:
       TRINO_VERSION: "${{ matrix.trino }}"
@@ -68,7 +64,7 @@ jobs:
         run: |
           sudo apt-get update
           pip install wheel
-          pip install .[tests] sqlalchemy${{ matrix.sqlalchemy }}
+          pip install .[tests]
       - name: Run tests
         run: |
           pytest -s dask_trino/tests/

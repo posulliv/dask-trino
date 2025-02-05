@@ -1,24 +1,27 @@
 import os
 import uuid
 
+import dask.dataframe as dd
+import dask.datasets
 import pandas as pd
 import pytest
 import trino
-from trino.sqlalchemy import URL
-from sqlalchemy import create_engine, text
-
-import dask
-import dask.dataframe as dd
-import dask.datasets
-from dask.utils import is_dataframe_like, parse_bytes
-from distributed import Client, Lock, worker_client
+from dask.utils import is_dataframe_like
+from dask.utils import parse_bytes
+from distributed import Client
+from distributed import Lock
+from distributed import worker_client
 from distributed.utils_test import cleanup  # noqa: F401
 from distributed.utils_test import client  # noqa: F401
 from distributed.utils_test import cluster_fixture  # noqa: F401
 from distributed.utils_test import loop  # noqa: F401
 from distributed.utils_test import loop_in_thread  # noqa: F401
+from sqlalchemy import create_engine
+from sqlalchemy import text
+from trino.sqlalchemy import URL
 
-from dask_trino import to_trino, read_trino
+from dask_trino import read_trino
+from dask_trino import to_trino
 
 
 @pytest.fixture()

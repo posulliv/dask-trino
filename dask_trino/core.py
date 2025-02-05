@@ -2,18 +2,18 @@ from functools import partial
 from typing import Any
 from typing import List
 
-import trino
-from trino.mapper import RowMapperFactory
-from trino.client import SegmentIterator, DecodableSegment
-from trino.mapper import RowMapper
-from trino.sqlalchemy import URL
-from sqlalchemy import create_engine, text
-
-import pandas as pd
-
 import dask
 import dask.dataframe as dd
+import pandas as pd
+import trino
 from dask.delayed import delayed
+from sqlalchemy import create_engine
+from sqlalchemy import text
+from trino.client import DecodableSegment
+from trino.client import SegmentIterator
+from trino.mapper import RowMapper
+from trino.mapper import RowMapperFactory
+from trino.sqlalchemy import URL
 
 MAX_QUERY_LENGTH = 1000000
 
@@ -72,7 +72,7 @@ def create_table_if_not_exists(
     sql = f"""
         SELECT COUNT(*)
         FROM information_schema.tables
-        WHERE 
+        WHERE
             table_catalog = '{connection_kwargs.get('catalog', 'system')}'
         AND table_schema = '{connection_kwargs.get('schema', 'runtime')}'
         AND table_name = '{name}'
@@ -135,12 +135,12 @@ def _fetch_segments(segments: List[DecodableSegment], row_mapper: RowMapper, col
     # now if you call df_out['col_name'] it will enter
     # into this function again with columns = ['col_name']
     df_columns = [column['name'] if isinstance(column, dict) else column for column in columns]
-    dataframes = []    
+    dataframes = []
     for segment in segments:
         rows = list(SegmentIterator(segment, row_mapper))
         df = pd.DataFrame(rows, columns=df_columns)
         dataframes.append(df[df_columns] if df_columns else df)
-    
+
     return pd.concat(dataframes, ignore_index=True) if dataframes else pd.DataFrame(columns=df_columns)
 
 
@@ -195,19 +195,19 @@ def read_trino(
     segments = cur.fetchall()
     columns = cur._query.columns
     row_mapper = RowMapperFactory().create(columns=columns, legacy_primitive_types=False)
-    
-    # segments is the list of segments we want to read 
+
+    # segments is the list of segments we want to read
     # from object storage. this will be done by dask in parallel.
     # if there are no segments, we return an empty DataFrame
     if len(segments) == 0:
         return dd.from_pandas(pd.DataFrame(), npartitions=1)
-    
+
     # Read the first segment to determine meta, which might be useful for a
     # better size estimate when partitioning maybe?
     meta = _fetch_segments([segments[0]], row_mapper, columns)
 
     segments_partitioned = _simple_partition_segments(segments, npartitions)
-    
+
     return dd.from_map(
         partial(_fetch_segments, row_mapper=row_mapper, columns=columns),
         segments_partitioned,

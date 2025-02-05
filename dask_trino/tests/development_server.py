@@ -7,7 +7,6 @@ from testcontainers.core.container import DockerContainer
 from testcontainers.core.network import Network
 from testcontainers.core.waiting_utils import wait_for_logs
 from testcontainers.localstack import LocalStackContainer
-
 from trino.constants import DEFAULT_PORT
 
 MINIO_ROOT_USER = "minio-access-key"

@@ -15,11 +15,11 @@ import sys
 from contextlib import closing
 
 import pytest
+from trino.constants import DEFAULT_PORT
 
 from dask_trino.tests.development_server import start_development_server
 from dask_trino.tests.development_server import TRINO_HOST
 from dask_trino.tests.development_server import TRINO_VERSION
-from trino.constants import DEFAULT_PORT
 
 
 def is_trino_available(host, port):

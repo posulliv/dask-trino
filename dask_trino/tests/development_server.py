@@ -48,7 +48,9 @@ def start_development_server(port=None, trino_version=TRINO_VERSION):
 
     try:
         network = Network().create()
-        localstack = LocalStackContainer(image="localstack/localstack:latest", region_name="us-east-1") \
+        localstack = LocalStackContainer(
+            image="localstack/localstack:latest", region_name="us-east-1"
+        ) \
             .with_name("localstack") \
             .with_network(network) \
             .with_bind_ports(4566, 4566) \
@@ -74,14 +76,21 @@ def start_development_server(port=None, trino_version=TRINO_VERSION):
         root = Path(__file__).parent
 
         trino = trino \
-            .with_volume_mapping(str(root / "etc/catalog"), "/etc/trino/catalog")
+            .with_volume_mapping(
+                str(root / "etc/catalog"), "/etc/trino/catalog"
+            )
 
         trino \
             .with_volume_mapping(
                 str(root / "etc/spooling-manager.properties"),
                 "/etc/trino/spooling-manager.properties", "rw") \
-            .with_volume_mapping(str(root / "etc/jvm.config"), "/etc/trino/jvm.config") \
-            .with_volume_mapping(str(root / "etc/config.properties"), "/etc/trino/config.properties")
+            .with_volume_mapping(
+                str(root / "etc/jvm.config"), "/etc/trino/jvm.config"
+            ) \
+            .with_volume_mapping(
+                str(root / "etc/config.properties"),
+                "/etc/trino/config.properties"
+            )
 
         print("Starting Trino container...")
         trino.start()

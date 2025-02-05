@@ -128,27 +128,42 @@ def to_trino(
     dask.compute(parts)
 
 
-def _fetch_segments(segments: List[DecodableSegment], row_mapper: RowMapper, columns: List[Any]):
+def _fetch_segments(
+        segments: List[DecodableSegment],
+        row_mapper: RowMapper,
+        columns: List[Any]
+):
     # TODO: why is this being called after the dask
     # dataframe has been created again?
     # for example df_out = read_trino(...)
     # now if you call df_out['col_name'] it will enter
     # into this function again with columns = ['col_name']
-    df_columns = [column['name'] if isinstance(column, dict) else column for column in columns]
+    df_columns = [
+        column['name'] if isinstance(column, dict)
+        else column for column in columns
+    ]
     dataframes = []
     for segment in segments:
         rows = list(SegmentIterator(segment, row_mapper))
         df = pd.DataFrame(rows, columns=df_columns)
         dataframes.append(df[df_columns] if df_columns else df)
 
-    return pd.concat(dataframes, ignore_index=True) if dataframes else pd.DataFrame(columns=df_columns)
+    return pd.concat(
+        dataframes,
+        ignore_index=True
+    ) if dataframes else pd.DataFrame(columns=df_columns)
 
 
-def _simple_partition_segments(segments, npartitions: None | int = None):
+def _simple_partition_segments(
+        segments: List[DecodableSegment],
+        npartitions: None | int = None
+) -> List[List[DecodableSegment]]:
     # split segments into npartitions lists
     if npartitions is None:
         return [segments]
-    segments_partitioned = [[] for _ in range(npartitions)]
+    segments_partitioned: List[List[DecodableSegment]] = [
+        [] for _ in range(npartitions)
+    ]
     for i, segment in enumerate(segments):
         segments_partitioned[i % npartitions].append(segment)
     return segments_partitioned
@@ -194,7 +209,9 @@ def read_trino(
     cur.execute(query)
     segments = cur.fetchall()
     columns = cur._query.columns
-    row_mapper = RowMapperFactory().create(columns=columns, legacy_primitive_types=False)
+    row_mapper = RowMapperFactory().create(
+        columns=columns, legacy_primitive_types=False
+    )
 
     # segments is the list of segments we want to read
     # from object storage. this will be done by dask in parallel.

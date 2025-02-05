@@ -7,15 +7,7 @@ import pandas as pd
 import pytest
 import trino
 from dask.utils import is_dataframe_like
-from dask.utils import parse_bytes
 from distributed import Client
-from distributed import Lock
-from distributed import worker_client
-from distributed.utils_test import cleanup  # noqa: F401
-from distributed.utils_test import client  # noqa: F401
-from distributed.utils_test import cluster_fixture  # noqa: F401
-from distributed.utils_test import loop  # noqa: F401
-from distributed.utils_test import loop_in_thread  # noqa: F401
 from sqlalchemy import create_engine
 from sqlalchemy import text
 from trino.sqlalchemy import URL
@@ -30,7 +22,12 @@ def trino_connection(request, run_trino):
     encoding = request.param
 
     yield trino.dbapi.Connection(
-        host=host, port=port, user="test", source="test", max_attempts=1, encoding=encoding
+        host=host,
+        port=port,
+        user="test",
+        source="test",
+        max_attempts=1,
+        encoding=encoding
     )
 
 
@@ -68,7 +65,8 @@ ddf = dd.from_pandas(df, npartitions=2)
 
 
 def test_read_empty_result(table, connection_kwargs):
-    # A query that yields in an empty results set should return an empty DataFrame
+    # A query that yields in an empty results set should return
+    # an empty DataFrame
     to_trino(ddf, name=table, connection_kwargs=connection_kwargs)
 
     result = read_trino(
@@ -90,7 +88,11 @@ def test_write_read_roundtrip(table, connection_kwargs):
     rows = connection.execute(text(query)).fetchall()
     assert len(rows) == 10
 
-    df_out = read_trino(query, connection_kwargs=connection_kwargs, npartitions=2)
+    df_out = read_trino(
+        query,
+        connection_kwargs=connection_kwargs,
+        npartitions=2
+    )
     assert df_out.shape[0].compute() == 10
     assert list(df.columns) == list(df_out.columns)
     dd.utils.assert_eq(
@@ -102,7 +104,11 @@ def test_query_with_filter(table, connection_kwargs):
     to_trino(ddf, name=table, connection_kwargs=connection_kwargs)
 
     query = f"SELECT * FROM {table} WHERE a = 3"
-    df_out = read_trino(query, connection_kwargs=connection_kwargs, npartitions=2)
+    df_out = read_trino(
+        query,
+        connection_kwargs=connection_kwargs,
+        npartitions=2
+    )
     assert df_out.shape[0].compute() == 1
     assert list(df.columns) == list(df_out.columns)
     dd.utils.assert_eq(
@@ -116,7 +122,11 @@ def test_query_with_filter(table, connection_kwargs):
 def test_writing_large_dataframe(connection_kwargs):
     df = dask.datasets.timeseries(end='2000-01-03')
     to_trino(df, name="large_table", connection_kwargs=connection_kwargs)
-    df_out = read_trino("select * from large_table", connection_kwargs=connection_kwargs, npartitions=2)
+    df_out = read_trino(
+        "select * from large_table",
+        connection_kwargs=connection_kwargs,
+        npartitions=2
+    )
     assert df_out.shape[0].compute() == df.shape[0].compute()
     engine = create_engine(URL(**connection_kwargs))
     connection = engine.connect()
@@ -124,6 +134,15 @@ def test_writing_large_dataframe(connection_kwargs):
 
 
 def test_read_large_resultset(connection_kwargs, client):
-    query = f"select l.* from tpch.tiny.lineitem l, table(sequence( start => 1, stop => 5, step => 1)) n"
-    df_out = read_trino(query, connection_kwargs=connection_kwargs, npartitions=2)
+    query = """
+    select
+      l.*
+    from
+      tpch.tiny.lineitem l,
+      table(sequence( start => 1, stop => 5, step => 1)) n"""
+    df_out = read_trino(
+        query,
+        connection_kwargs=connection_kwargs,
+        npartitions=2
+    )
     assert df_out.shape[0].compute() == 300875

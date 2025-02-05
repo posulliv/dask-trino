@@ -21,7 +21,6 @@ tests_require = [
     "testcontainers",
     "boto3",
     "pandas",
-    "pyarrow",
 ]
 
 setup(

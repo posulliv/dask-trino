@@ -1,4 +1,4 @@
-__title__ = "trino-dask"
+__title__ = "dask-trino"
 __description__ = "dask integration for trino"
 __url__ = "https://github.com/posulliv/dask-trino"
 __version__ = "0.1.0"

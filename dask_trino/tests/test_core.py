@@ -106,7 +106,7 @@ def test_writing_large_dataframe(connection_kwargs):
     assert df_out.shape[0].compute() == df.shape[0].compute()
     engine = create_engine(URL(**connection_kwargs))
     connection = engine.connect()
-    connection.execute(text("drop table large_table")).fetchall()
+    connection.execute(text("drop table large_table"))
 
 
 def test_read_large_resultset(connection_kwargs, client):

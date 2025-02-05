@@ -1,13 +1,10 @@
 from functools import partial
 from typing import Any
 from typing import List
-from typing import Optional
-from typing import Union
-from collections.abc import Iterator
 
 import trino
 from trino.mapper import RowMapperFactory
-from trino.client import DecodableSegment, SpooledSegment, SegmentDecoder, CompressedQueryDataDecoderFactory
+from trino.client import SegmentIterator, DecodableSegment
 from trino.mapper import RowMapper
 from trino.sqlalchemy import URL
 from sqlalchemy import create_engine, text
@@ -47,9 +44,7 @@ def df_to_sql_bulk_insert(df: pd.DataFrame, table: str) -> list:
                 current_query += values
             else:
                 current_query += ",\n" + values
-    # if we just have one query that was under MAX_QUERY_LENGTH
-    # add it to the list of queries
-    if current_query and len(queries) == 0:
+    if current_query not in queries:
         queries.append(current_query)
 
     return queries
@@ -133,48 +128,7 @@ def to_trino(
     dask.compute(parts)
 
 
-class CustomSegmentIterator:
-    def __init__(self, segments: Union[DecodableSegment, List[DecodableSegment]], mapper: RowMapper) -> None:
-        self._segments = iter(segments if isinstance(segments, List) else [segments])
-        self._mapper = mapper
-        self._decoder = None
-        self._rows: Iterator[List[List[Any]]] = iter([])
-        self._finished = False
-        self._current_segment: Optional[DecodableSegment] = None
-
-    def __iter__(self) -> Iterator[List[Any]]:
-        return self
-
-    def __next__(self) -> List[Any]:
-        # If rows are exhausted, fetch the next segment
-        while True:
-            try:
-                return next(self._rows)
-            except StopIteration:
-                if self._finished:
-                    raise StopIteration
-                self._load_next_segment()
-
-    def _load_next_segment(self):
-        try:
-            # TODO - client needs to delete segments from storage
-            # causes issues with _fetch_segments method if 
-            # segments are deleted.
-            #if self._current_segment:
-             #   segment = self._current_segment.segment
-                #if isinstance(segment, SpooledSegment):
-                #    segment.acknowledge()
-
-            self._current_segment = next(self._segments)
-            if self._decoder is None:
-                self._decoder = SegmentDecoder(CompressedQueryDataDecoderFactory(self._mapper)
-                                               .create(self._current_segment.encoding))
-            self._rows = iter(self._decoder.decode(self._current_segment.segment))
-        except StopIteration:
-            self._finished = True
-
-
-def _fetch_segments(segments, row_mapper, columns):
+def _fetch_segments(segments: List[DecodableSegment], row_mapper: RowMapper, columns: List[Any]):
     # TODO: why is this being called after the dask
     # dataframe has been created again?
     # for example df_out = read_trino(...)
@@ -183,8 +137,9 @@ def _fetch_segments(segments, row_mapper, columns):
     df_columns = [column['name'] if isinstance(column, dict) else column for column in columns]
     dataframes = []    
     for segment in segments:
-        rows = list(CustomSegmentIterator(segment, row_mapper))
-        dataframes.append(pd.DataFrame(rows, columns=df_columns))
+        rows = list(SegmentIterator(segment, row_mapper))
+        df = pd.DataFrame(rows, columns=df_columns)
+        dataframes.append(df[df_columns] if df_columns else df)
     
     return pd.concat(dataframes, ignore_index=True) if dataframes else pd.DataFrame(columns=df_columns)
 
@@ -247,14 +202,14 @@ def read_trino(
     if len(segments) == 0:
         return dd.from_pandas(pd.DataFrame(), npartitions=1)
     
-    # Read the first segment to determine meta, which is useful for a
+    # Read the first segment to determine meta, which might be useful for a
     # better size estimate when partitioning maybe?
-    # We don't need this for now but will leave this here for future reference.
-    #meta = _fetch_segments([segments[0]], row_mapper, columns)
+    meta = _fetch_segments([segments[0]], row_mapper, columns)
 
     segments_partitioned = _simple_partition_segments(segments, npartitions)
     
     return dd.from_map(
         partial(_fetch_segments, row_mapper=row_mapper, columns=columns),
         segments_partitioned,
+        meta=meta,
     )

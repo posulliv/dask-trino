@@ -21,6 +21,16 @@ from distributed.utils_test import loop_in_thread  # noqa: F401
 from dask_trino import to_trino, read_trino
 
 
+@pytest.fixture()
+def trino_connection(request, run_trino):
+    host, port = run_trino
+    encoding = request.param
+
+    yield trino.dbapi.Connection(
+        host=host, port=port, user="test", source="test", max_attempts=1, encoding=encoding
+    )
+
+
 @pytest.fixture
 def client():
     with Client(n_workers=2, threads_per_worker=10) as client:
@@ -39,13 +49,14 @@ def table(connection_kwargs):
 
 
 @pytest.fixture(scope="module")
-def connection_kwargs():
+def connection_kwargs(run_trino):
+    host, port = run_trino
     return dict(
-        user=os.environ["TRINO_USER"],
-        host=os.environ["TRINO_HOST"],
-        port=os.environ["TRINO_PORT"],
-        catalog=os.environ.get("TRINO_CATALOG", "system"),
-        schema=os.environ.get("TRINO_SCHEMA", "runtime"),
+        user="pytest",
+        host=host,
+        port=port,
+        catalog=os.environ.get("TRINO_CATALOG", "memory"),
+        schema=os.environ.get("TRINO_SCHEMA", "default"),
     )
 
 

@@ -45,7 +45,7 @@ for parallel IO from trino with Dask.
 >>> from dask_trino import read_trino
 >>> example_query = '''
 ...    SELECT *
-...    FROM tpch.sf1.customer;
+...    FROM tpch.sf1.customer
 ... '''
 >>> ddf = read_trino(
 ...     query=example_query,

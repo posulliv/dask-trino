@@ -95,6 +95,7 @@ def test_write_read_roundtrip(table, connection_kwargs):
     )
     assert df_out.shape[0].compute() == 10
     assert list(df.columns) == list(df_out.columns)
+    assert df_out['a'].count().compute() == 10
     dd.utils.assert_eq(
         df.set_index('a'), df_out.set_index('a')
     )

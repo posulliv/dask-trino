@@ -131,27 +131,18 @@ def to_trino(
 def _fetch_segments(
         segments: List[DecodableSegment],
         row_mapper: RowMapper,
-        columns: List[Any]
+        df_columns: List[Any]
 ):
-    # TODO: why is this being called after the dask
-    # dataframe has been created again?
-    # for example df_out = read_trino(...)
-    # now if you call df_out['col_name'] it will enter
-    # into this function again with columns = ['col_name']
-    df_columns = [
-        column['name'] if isinstance(column, dict)
-        else column for column in columns
-    ]
     dataframes = []
     for segment in segments:
         rows = list(SegmentIterator(segment, row_mapper))
-        df = pd.DataFrame(rows, columns=df_columns)
-        dataframes.append(df[df_columns] if df_columns else df)
+        df = pd.DataFrame(rows, columns=[column['name'] for column in df_columns])
+        dataframes.append(df)
 
     return pd.concat(
         dataframes,
         ignore_index=True
-    ) if dataframes else pd.DataFrame(columns=df_columns)
+    ) if dataframes else pd.DataFrame(columns=[column['name'] for column in df_columns])
 
 
 def _simple_partition_segments(
@@ -226,7 +217,7 @@ def read_trino(
     segments_partitioned = _simple_partition_segments(segments, npartitions)
 
     return dd.from_map(
-        partial(_fetch_segments, row_mapper=row_mapper, columns=columns),
+        partial(_fetch_segments, row_mapper=row_mapper, df_columns=columns),
         segments_partitioned,
         meta=meta,
     )

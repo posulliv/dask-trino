@@ -136,13 +136,18 @@ def _fetch_segments(
     dataframes = []
     for segment in segments:
         rows = list(SegmentIterator(segment, row_mapper))
-        df = pd.DataFrame(rows, columns=[column['name'] for column in df_columns])
+        df = pd.DataFrame(
+            rows,
+            columns=[column['name'] for column in df_columns]
+        )
         dataframes.append(df)
 
     return pd.concat(
         dataframes,
         ignore_index=True
-    ) if dataframes else pd.DataFrame(columns=[column['name'] for column in df_columns])
+    ) if dataframes else pd.DataFrame(
+        columns=[column['name'] for column in df_columns]
+    )
 
 
 def _simple_partition_segments(

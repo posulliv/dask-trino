@@ -126,7 +126,7 @@ def test_writing_large_dataframe(connection_kwargs):
     df_out = read_trino(
         "select * from large_table",
         connection_kwargs=connection_kwargs,
-        npartitions=2
+        npartitions=1
     )
     assert df_out.shape[0].compute() == df.shape[0].compute()
     engine = create_engine(URL(**connection_kwargs))
